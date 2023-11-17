@@ -1,7 +1,13 @@
 doTraining = true;
-veloReader = velodyneFileReader("Database\Data\capture3_120.pcap","VLP16");
+veloReader = velodyneFileReader("Database\Data\capture6_120.pcap","VLP16");
 
-labels = load("Database\Labels\Capture3_120_labels.mat");
+outputFolder = fullfile(pwd, "Database");
+
+gtPath = fullfile(outputFolder, 'Labels', 'Capture6_120_labels.mat');
+% labels = load("Database\Labels\Capture3_120_labels.mat");
+labelData = load(gtPath);
+labels = timetable2table(labelData.gTruth.LabelData);
+boxLabels = labels(:,"Human");
 
 xlimits = [0 10];
 ylimits = [-6 6];
@@ -11,9 +17,9 @@ yStep = 0.10;
 pointcldRange = [xlimits(1) xlimits(2) ylimits(1) ylimits(2) zlimits(1) zlimits(2)];
 voxelSize = [xStep yStep];
 
-outputFolder = fullfile(pwd, "Database");
+
 % Preprocessing the data with the labes
-[trainData, testData, trainLabels, testLabels, dataLocation] = preProcessData(labels, ...
+[trainData, testData, trainLabels, testLabels, dataLocation] = preProcessData(boxLabels, ...
     veloReader, outputFolder);
 
 lds = fileDatastore(dataLocation, 'ReadFcn', @(x) pcread(x));
@@ -21,7 +27,7 @@ bds = boxLabelDatastore(trainLabels);
 cds = combine(lds, bds);
 
 % testing current state of the data augmentation----------
-% augData = read(cds);
+augData = read(cds);
 augData = read(cds);
 augptCld = augData{1,1};
 augLabels = augData{1,2};
@@ -33,29 +39,29 @@ helperDisplay3DBoxesOverlaidPointCloud(augptCld.Location,labelsHuman,'green',...
     'Before Data Augmentation');
 
 reset(cds);
-% 
-% classNames = {'Human'};
-% sampleLocation = fullfile(outputFolder, "Samples");
-% [ldsSampled,bdsSampled] = sampleLidarData(cds,classNames,'MinPoints',20,...                  
-%                             'Verbose',false,'WriteLocation',sampleLocation);
-% cdsSampled = combine(ldsSampled,bdsSampled);
-% 
-% numObjects = 5;
-% cdsAugmented = transform(cds,@(x)pcBboxOversample(x,cdsSampled,classNames,numObjects));
-% 
-% cdsAugmented = transform(cdsAugmented,@(x)augmentData(x));
-% 
-% augData = read(cdsAugmented);
-% augptCld = augData{1,1};
-% augLabels = augData{1,2};
-% augClass = augData{1,3};
-% 
-% labelsHuman = augLabels(augClass=='Human',:);
-% 
-% helperDisplay3DBoxesOverlaidPointCloud(augptCld.Location,labelsHuman,'green',...
-%     'After Data Augmentation');
-% 
-% reset(cdsAugmented);
+
+classNames = {'Human'};
+sampleLocation = fullfile(outputFolder, "Samples");
+[ldsSampled,bdsSampled] = sampleLidarData(cds,classNames,'MinPoints',20,...                  
+                            'Verbose',false,'WriteLocation',sampleLocation);
+cdsSampled = combine(ldsSampled,bdsSampled);
+
+numObjects = 2;
+cdsAugmented = transform(cds,@(x)pcBboxOversample(x,cdsSampled,classNames,numObjects));
+
+cdsAugmented = transform(cdsAugmented,@(x)augmentData(x));
+
+augData = read(cdsAugmented);
+augptCld = augData{1,1};
+augLabels = augData{1,2};
+augClass = augData{1,3};
+
+labelsHuman = augLabels(augClass=='Human',:);
+
+helperDisplay3DBoxesOverlaidPointCloud(augptCld.Location,labelsHuman,'green',...
+    'After Data Augmentation');
+
+reset(cdsAugmented);
 
 %Create PointPillars Object Detector---------------------------------------
 % Define the number of prominent pillars.

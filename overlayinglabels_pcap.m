@@ -1,6 +1,6 @@
-veloReader = velodyneFileReader("Database\Data\capture1_120.pcap","VLP16");
+veloReader = velodyneFileReader("Database\Data\capture2_120.pcap","VLP16");
 
-labels = load("Database\Labels\Capture1_120_labels.mat");
+labels = load("Database\Labels\Cap");
 
 dim = size(labels.gTruth.LabelData.Human);
 processed_label = zeros(dim(1), 9);
