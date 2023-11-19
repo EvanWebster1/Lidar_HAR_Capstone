@@ -3,25 +3,12 @@ function [trainData, testData, trainLabels, testLabels, dataLocation] = preProce
     % labels variable. Formatting the labels and data into two tables of
     % cells.
     
-    % count how many cells have no label
-    count_empty = 0;
-    for i = 1:size(boxLabels, 1)
-        if isempty(cell2mat(boxLabels{i,1}))
-            count_empty = count_empty + 1;
-        end
-    end
-    % ISSUE: if count_empty is used in the definition of processed_label
-    % the format of processed_label after doing cell2table gets messed up.
-    % format of processed_labels after doing cell2table should be the same
-    % as boxlabels without the empty cells.
-    label_size = size(boxLabels,1) - count_empty;
-
+    label_size = size(boxLabels,1);
     % setting up processed labels and data cell arrays
     processed_labels = cell(label_size, 1);
     numFrames = size(boxLabels, 1);
     processed_data = cell(size(numFrames));
     classNames = boxLabels.Properties.VariableNames;
-    count = 1;
 
     for i = 1:numFrames
         ptCloudObj = readFrame(veloReader);
@@ -43,21 +30,11 @@ function [trainData, testData, trainLabels, testLabels, dataLocation] = preProce
                 posLabels = cellfun(@(x)(length(x) > 50), numPoints);
                 labels = labels(posLabels,:);
             end
-            % ignore any frames where the label is empty
-            if isempty(labels)
-                del = true;
-            else
-                processed_labels{count,ii} = labels;
-            end
+            processed_labels{i, ii} = labels;
         end
-        % if the label has been ignored for this frame make sure the
-        % ptcloud for this frame also gets ignored
-        if del == false
-            processed_data{count,1} = ptCloudObj;
-            count = count + 1;
-        end
+        processed_data{i,1} = ptCloudObj;
     end
-  
+    % processed_labels{count,1} = [];
     % at the end of this loop processed_labels should be a table of cells
     processed_labels = cell2table(processed_labels);
     numClasses = size(processed_labels,2);

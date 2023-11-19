@@ -46,7 +46,7 @@ sampleLocation = fullfile(outputFolder, "Samples");
                             'Verbose',false,'WriteLocation',sampleLocation);
 cdsSampled = combine(ldsSampled,bdsSampled);
 
-numObjects = 2;
+numObjects = 5;
 cdsAugmented = transform(cds,@(x)pcBboxOversample(x,cdsSampled,classNames,numObjects));
 
 cdsAugmented = transform(cdsAugmented,@(x)augmentData(x));
@@ -101,7 +101,7 @@ options = trainingOptions('adam',...
     'CheckpointPath',tempdir);
 
 if doTraining    
-    [detector,info] = trainPointPillarsObjectDetector(cds,detector,options);
+    [detector,info] = trainPointPillarsObjectDetector(cdsAugmented,detector,options);
 else
     pretrainedDetector = load('pretrainedPointPillarsDetector.mat','detector');
     detector = pretrainedDetector.detector;

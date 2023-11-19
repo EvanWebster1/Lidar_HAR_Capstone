@@ -42,7 +42,7 @@ function data = randomFlip(data)
     numObservations = size(data,1);
     for i = 1:numObservations
         pc = data{i,1};
-        pc = [pc.Location pc.Intensity];
+        pc = [pc.Location single(pc.Intensity)];
         bbox = data{i,2};
         if randi([0,1])
             bbox(:,2) = -bbox(:,2);
