@@ -1,9 +1,9 @@
 doTraining = true;
-veloReader = velodyneFileReader("Database\Data\capture6_120.pcap","VLP16");
+veloReader = velodyneFileReader("Database\Data\capture3_120.pcap","VLP16");
 
 outputFolder = fullfile(pwd, "Database");
 
-gtPath = fullfile(outputFolder, 'Labels', 'Capture6_120_labels.mat');
+gtPath = fullfile(outputFolder, 'Labels', 'Capture3_120_labels.mat');
 % labels = load("Database\Labels\Capture3_120_labels.mat");
 labelData = load(gtPath);
 labels = timetable2table(labelData.gTruth.LabelData);
@@ -28,29 +28,29 @@ cds = combine(lds, bds);
 
 % testing current state of the data augmentation----------
 augData = read(cds);
-augData = read(cds);
 augptCld = augData{1,1};
 augLabels = augData{1,2};
 augClass = augData{1,3};
 
 labelsHuman = augLabels(augClass=='Human',:);
 
-helperDisplay3DBoxesOverlaidPointCloud(augptCld.Location,labelsHuman,'green',...
-    'Before Data Augmentation');
+% helperDisplay3DBoxesOverlaidPointCloud(augptCld.Location,labelsHuman,'green',...
+%     'Before Data Augmentation');
 
 reset(cds);
 
 classNames = {'Human'};
 sampleLocation = fullfile(outputFolder, "Samples");
 [ldsSampled,bdsSampled] = sampleLidarData(cds,classNames,'MinPoints',20,...                  
-                            'Verbose',false,'WriteLocation',sampleLocation);
+                             'Verbose',false,'WriteLocation',sampleLocation);
 cdsSampled = combine(ldsSampled,bdsSampled);
 
-numObjects = 5;
-cdsAugmented = transform(cds,@(x)pcBboxOversample(x,cdsSampled,classNames,numObjects));
+numObjects = 10;
+cdsAugmented = transform(cds,@(x)pcBboxOversampler(x,cdsSampled,classNames,numObjects));
 
-cdsAugmented = transform(cdsAugmented,@(x)augmentData(x));
+cdsAugmented = transform(cdsAugmented,@(x) augmentData(x));
 
+augData = read(cdsAugmented);
 augData = read(cdsAugmented);
 augptCld = augData{1,1};
 augLabels = augData{1,2};
@@ -58,8 +58,8 @@ augClass = augData{1,3};
 
 labelsHuman = augLabels(augClass=='Human',:);
 
-helperDisplay3DBoxesOverlaidPointCloud(augptCld.Location,labelsHuman,'green',...
-    'After Data Augmentation');
+% helperDisplay3DBoxesOverlaidPointCloud(augptCld.Location,labelsHuman,'green',...
+%     'After Data Augmentation');
 
 reset(cdsAugmented);
 
@@ -72,7 +72,7 @@ N = 100;
 
 anchorBoxes = calculateAnchorsPointPillars(trainLabels);
 classNames = trainLabels.Properties.VariableNames;
-
+% 
 detector = pointPillarsObjectDetector(pointcldRange,classNames,anchorBoxes,...
     'VoxelSize',voxelSize,'NumPillars',P,'NumPointsPerPillar',N);
 
@@ -101,6 +101,7 @@ options = trainingOptions('adam',...
     'CheckpointPath',tempdir);
 
 if doTraining    
+    display("Entering Training: ------------------------")
     [detector,info] = trainPointPillarsObjectDetector(cdsAugmented,detector,options);
 else
     pretrainedDetector = load('pretrainedPointPillarsDetector.mat','detector');
