@@ -17,7 +17,7 @@ close all
     %'Pandaset_LidarData.tar.gz'];
 %helperDownloadPandasetData(outputFolder,lidarURL);
 
-outputFolder= 'C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Pandaset';
+outputFolder= 'C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Database\';
 
 %Load Data------------------------------------------------------------
 %creates the full path to read from
@@ -25,18 +25,6 @@ path = fullfile(outputFolder,'my_Lidar');
 %lidarData is a datastore object that can be read, each time it is read it
 %moves to the next files
 lidarData = fileDatastore(path,'ReadFcn',@(x) pcread(x));
-
-%create path for ground truths
-gtPath = fullfile(outputFolder,'my_Labels','Capture2_120_labels.mat');
-%load data from path
-%data is a timetable object(first column is the date/time)
-data = load(gtPath,'gTruth');
-%convert timetable to a table we can actualy use
-Labels = timetable2table(data.gTruth.LabelData);
-%extract just the labels, i think that it a list of lists that contain 9
-%points each that represent the bounding box of the cuboid
-boxLabels = Labels(:,2)
-
 
 figure
 %read the datastore object which also advances the next read to the next
@@ -56,14 +44,14 @@ reset(lidarData);
 
 
 %Preprocess Data-----------------------------------------------------------
-numFrames = size(boxLabels,1);
-processedPointCloud = cell(numFrames, 1);
-
-for i = 1:numFrames
+i = 1;
+while(hasdata(lidarData))
 
     ptCloud = read(lidarData);            
     processedData = removeInvalidPoints(ptCloud);
     processedPointCloud{i,1} = processedData;
+    i = i + 1;
+
 end
 
 reset(lidarData);
@@ -83,7 +71,7 @@ testLabels = processedLabels;
 
 
 
-pretrainedDetector = load('C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Pandaset\my_trained_detector.mat','detector');
+pretrainedDetector = load('C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Database\my_trained_detector_12356.mat','detector');
 detector = pretrainedDetector.detector;
 disp("here")
 

@@ -1,24 +1,60 @@
-%%----
-%data=load('C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Pandaset\my_Labels\Capture3_120_labels.mat')
-%disp(data.gTruth.LabelData);
-%%
-doTraining = true;
-canUseParallelPool = false;
+
+doTraining = false;
+canUseParallelPool = true;
+doConvertPCAP = false;
+
+%Convert PCAP to a series of PCD Files for use later-----------------------
+if(doConvertPCAP)
+    outputFolder = fullfile('C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE');pcplayer
+    %Saving the PCD files of the data
+    pcdfolder = fullfile(outputFolder, '\Database\my_Lidar\')
+    %Reading the lidar file
+    
+    %creates the full path to read from
+    lidarPath = fullfile(outputFolder,'\Database\Data\');
+    lidarData = dir(lidarPath);
+    
+    lidarCount = 0
+    for i = 3:size(lidarData)
+    
+        lidarFilePath = append(lidarPath,lidarData(i).name);
+        veloReader = velodyneFileReader(lidarFilePath,'VLP16');
+    
+        %Limits of the Lidar
+        xlimits = [-60 60];
+        ylimits = [-80 80];
+        zlimits = [-20 20];
+        player = pcplayer(xlimits,ylimits,zlimits);
+        %Label the Axes
+        xlabel(player.Axes,'X (m)');
+        ylabel(player.Axes,'Y (m)');
+        zlabel(player.Axes,'Z (m)');
+        frame=1;
+        %Display
+        while(hasFrame(veloReader) && player.isOpen())
+            ptCloud = readFrame(veloReader,frame);
+            ptCloud = pointCloud(reshape(ptCloud.Location, [],3), 'Intensity',single(reshape(ptCloud.Intensity, [],1)));
+            name = sprintf('frame%04d.pcd',frame+lidarCount);
+            pcwrite(ptCloud, fullfile(pcdfolder,name));
+            frame=frame+1;
+        end
+    
+        lidarCount = lidarCount + veloReader.NumberOfFrames;
+    
+    end
+end
+
+%--------------------------------------------------------------------------
 
 outputFolder= 'C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Pandaset';
 outputFolderDatabase= 'C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Database\';
 
 %Load Data------------------------------------------------------------
 %creates the full path to read from
-path = fullfile(outputFolder,'my_Lidar');
+path = fullfile(outputFolderDatabase,'my_Lidar');
 %lidarData is a datastore object that can be read, each time it is read it
 %moves to the next files
 lidarData = fileDatastore(path,'ReadFcn',@(x) pcread(x));
-
-%create path for ground truths
-gtPath = fullfile(outputFolder,'my_Labels','Capture3_120_labels.mat');
-%load data from path
-%data is a timetable object(first column is the date/time)
 
 labelPath = fullfile(outputFolderDatabase,'Labels\');
 labelData = dir(labelPath);
@@ -53,12 +89,12 @@ reset(lidarData);
 
 %Preprocess Data-----------------------------------------------------------
 
-xMin = 0.0;     % Minimum value along X-axis.
-yMin = -39.68;  % Minimum value along Y-axis.
-zMin = -5.0;    % Minimum value along Z-axis.
-xMax = 69.12;   % Maximum value along X-axis.
-yMax = 39.68;   % Maximum value along Y-axis.
-zMax = 5.0;     % Maximum value along Z-axis.
+xMin = -60;     % Minimum value along X-axis.
+yMin = -80;  % Minimum value along Y-axis.
+zMin = -20;    % Minimum value along Z-axis.
+xMax = 60;   % Maximum value along X-axis.
+yMax = 80;   % Maximum value along Y-axis.
+zMax = 20;     % Maximum value along Z-axis.
 xStep = 0.16;   % Resolution along X-axis.
 yStep = 0.16;   % Resolution along Y-axis.
 dsFactor = 2.0; % Downsampling factor.
@@ -71,9 +107,17 @@ Yn = round(((yMax - yMin)/yStep));
 pointCloudRange = [xMin xMax yMin yMax zMin zMax];
 voxelSize = [xStep yStep];
 
-[croppedPointCloudObj,processedLabels] = cropFrontViewFromLidarData(lidarData,boxLabels,pointCloudRange);
+numFrames = size(boxLabels,1);
+processedPointCloud = cell(numFrames, 1);
+processedLabels = boxLabels;
+for i = 1:numFrames
 
-pc = croppedPointCloudObj{100,1};
+    ptCloud = read(lidarData);            
+    processedData = removeInvalidPoints(ptCloud);
+    processedPointCloud{i,1} = processedData;
+end
+
+pc = processedPointCloud{100,1};
 gtLabelsHuman = processedLabels.Human{100};
 %gtLabelsTruck = processedLabels.Truck{1};
 
@@ -86,14 +130,14 @@ rng(1);
 shuffledIndices = randperm(size(processedLabels,1));
 idx = floor(0.7 * length(shuffledIndices));
 
-trainData = croppedPointCloudObj(shuffledIndices(1:idx),:);
-testData = croppedPointCloudObj(shuffledIndices(idx+1:end),:);
+trainData = processedPointCloud(shuffledIndices(1:idx),:);
+testData = processedPointCloud(shuffledIndices(idx+1:end),:);
 
 trainLabels = processedLabels(shuffledIndices(1:idx),:);
 testLabels = processedLabels(shuffledIndices(idx+1:end),:);
 
 writeFiles = true;
-dataLocation = fullfile(outputFolder,'my_InputData');
+dataLocation = fullfile(outputFolderDatabase,'my_InputData');
 [trainData,trainLabels] = saveptCldToPCD(trainData,trainLabels,...
     dataLocation,writeFiles);
 
@@ -117,7 +161,7 @@ helperDisplay3DBoxesOverlaidHuman(augptCld.Location,gtLabelsHuman,'green','Befor
 reset(cds);
 
 classNames = {'Human'};
-sampleLocation = fullfile(outputFolder,'my_GTsamples');
+sampleLocation = fullfile(outputFolderDatabase,'my_GTsamples');
 [ldsSampled,bdsSampled] = sampleLidarData(cds,classNames,'MinPoints',20,...                  
                             'Verbose',false,'WriteLocation',sampleLocation);
 cdsSampled = combine(ldsSampled,bdsSampled);
@@ -152,7 +196,7 @@ detector = pointPillarsObjectDetector(pointCloudRange,classNames,anchorBoxes,...
     'VoxelSize',voxelSize,'NumPillars',P,'NumPointsPerPillar',N);
 
 %Train Pointpillars Object Detector----------------------------------------
-executionEnvironment = "auto";
+executionEnvironment = "gpu";
 if canUseParallelPool
     dispatchInBackground = true;
 else
@@ -178,10 +222,10 @@ options = trainingOptions('adam',...
 if doTraining    
     [detector,info] = trainPointPillarsObjectDetector(cdsAugmented,detector,options);
 
-    outputFile = fullfile(outputFolder, "my_trained_detector_2+3.mat");
+    outputFile = fullfile(outputFolderDatabase, "my_trained_detector_12356.mat");
     save(outputFile, "detector");
 else
-    pretrainedDetector = load('C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Pandaset\my_trained_detector.mat','detector');
+    pretrainedDetector = load('C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Database\my_trained_detector_12356.mat','detector');
     detector = pretrainedDetector.detector;
 end
 
@@ -230,26 +274,6 @@ disp(metrics(:,1:2))
 
 %helper fuctions-----------------------------------------------------------
 disp("done")
-function helperDownloadPandasetData(outputFolder,lidarURL)
-% Download the data set from the given URL to the output folder.
-
-    lidarDataTarFile = fullfile(outputFolder,'Pandaset_LidarData.tar.gz');
-    
-    if ~exist(lidarDataTarFile,'file')
-        mkdir(outputFolder);
-        
-        disp('Downloading PandaSet Lidar driving data (5.2 GB)...');
-        websave(lidarDataTarFile,lidarURL);
-        untar(lidarDataTarFile,outputFolder);
-    end
-    
-    % Extract the file.
-    if (~exist(fullfile(outputFolder,'Lidar'),'dir'))...
-            &&(~exist(fullfile(outputFolder,'Cuboids'),'dir'))
-        untar(lidarDataTarFile,outputFolder);
-    end
-
-end
 
 function helperDisplay3DBoxesOverlaidPointCloud(ptCld,labelsCar,carColor,...
     labelsTruck,truckColor,titleForFigure)
