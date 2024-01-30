@@ -3,7 +3,7 @@
 
 outputFolder = fullfile('C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE');
 %Saving the PCD files of the data
-pcdfolder = fullfile(outputFolder, 'output')
+pcdfolder = fullfile(outputFolder, '\Database\my_Lidar\')
 %Reading the lidar file
 
 %creates the full path to read from

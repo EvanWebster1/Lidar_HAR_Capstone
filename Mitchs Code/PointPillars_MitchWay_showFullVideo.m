@@ -1,7 +1,7 @@
 
 %controlls:
 doEvaluate = false;
-doShowFullLidar = true
+doShowFullLidar = true;
 tic;
 % tic;
 %         elapsedTime = toc;
@@ -11,37 +11,13 @@ tic;
 
 close all
 
-%outputFolder = fullfile('C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE','Pandaset');
-
-%lidarURL = ['https://ssd.mathworks.com/supportfiles/lidar/data/' ...
-    %'Pandaset_LidarData.tar.gz'];
-%helperDownloadPandasetData(outputFolder,lidarURL);
-
 outputFolder= 'C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Database\';
 
 %Load Data------------------------------------------------------------
-%creates the full path to read from
+
 path = fullfile(outputFolder,'my_Lidar');
-%lidarData is a datastore object that can be read, each time it is read it
-%moves to the next files
+
 lidarData = fileDatastore(path,'ReadFcn',@(x) pcread(x));
-
-figure
-%read the datastore object which also advances the next read to the next
-%one
-ptCld = read(lidarData);
-%pointcloud.location is the locations of all points
-%https://www.mathworks.com/help/vision/ref/pointcloud.html
-ax = pcshow(ptCld.Location);
-%set the sizing for the 3d view
-%set zoom amount
-zoom(ax,1.5);
-axis off;
-
-%reset let lidat datastore to be back at the first file
-reset(lidarData);
-
-
 
 %Preprocess Data-----------------------------------------------------------
 i = 1;
@@ -71,13 +47,13 @@ testLabels = processedLabels;
 
 
 
-pretrainedDetector = load('C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Database\my_trained_detector_12356.mat','detector');
+pretrainedDetector = load('C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Database\plsdo3.mat','detector');
 detector = pretrainedDetector.detector;
 disp("here")
 
 %Generate Detections-------------------------------------------------------
 if doShowFullLidar
-    helperDisplay3DBoxesAndFullLidar2(testData, "green","title", detector)
+    helperDisplay3DBoxesAndFullLidar2(testData, detector)
 end
 %Evaluate Detector Using Test Set------------------------------------------
 if(doEvaluate)
@@ -110,16 +86,7 @@ elapsedTime = toc;
 fprintf('Elapsed Time: %.4f seconds\n', elapsedTime);
 %helper fuctions-----------------------------------------------------------
 
-function helperDisplay3DBoxesOverlaidHuman(ptCld,labelsHuman,humanColor,titleForFigure)
-% Display the point cloud with different colored bounding boxes for different
-% classes.
-    figure;
-    ax = pcshow(ptCld);
-    showShape('cuboid',labelsHuman ,'Parent',ax,'Opacity',0.1,...
-        'Color',humanColor,'LineWidth',0.5);
-    title(titleForFigure);
-    zoom(ax,1.5);
-end
+
 
 function helperDisplay3DBoxesAndFullLidar(pointCloudList,labelsList,humanColor,titleForFigure, detector)
     figure;
@@ -152,7 +119,7 @@ end
 
 
 
-function helperDisplay3DBoxesAndFullLidar2(pointCloudList,humanColor,titleForFigure, detector)
+function helperDisplay3DBoxesAndFullLidar2(pointCloudList, detector)
 
     player = pcplayer([-2 10],[-5 5],[-2 2]);
     for i = 1:size(pointCloudList)
@@ -160,17 +127,29 @@ function helperDisplay3DBoxesAndFullLidar2(pointCloudList,humanColor,titleForFig
 
         % Specify the confidence threshold to use only detections with
         % confidence scores above this value.
-        confidenceThreshold = 0.50;
+        confidenceThreshold = 0.75;
         [box,~,labels] = detect(detector,ptCloud,'Threshold',confidenceThreshold);
 
-        boxlabelsHuman = box(labels'=='Human',:);
-
+ 
         % Display the predictions on the point cloud.
         
         view(player,ptCloud); 
-        showShape('cuboid',boxlabelsHuman ,'Parent',player.Axes,'Opacity',0.1,...
-        'Color',humanColor,'LineWidth',0.5);
+        for j = 1:size(labels,1)
+            boxlabels = box(labels'==labels(j),:);
+            switch labels(j)
+                case "Walking"
+                    labelColour = "green";
+                case "Standing"
+                    labelColour = "yellow";
+                case "Crouching"
+                    labelColour = "red";
+                otherwise
+                    labelColour = "purple";
+            end
 
+            showShape('cuboid',boxlabels,'Parent',player.Axes,'Opacity',0.1, ...
+                'Color',labelColour,'LineWidth',0.5, "Label",labels(j),"LabelOpacity",0.5);
+        end
     end
 
 end
