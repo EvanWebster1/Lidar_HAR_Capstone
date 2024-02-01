@@ -112,7 +112,6 @@ if doTraining
     
     % Define the number of prominent pillars.
     P = 12000; 
-    
     % Define the number of points per pillar.
     N = 100;  
     
@@ -121,7 +120,6 @@ if doTraining
     
     detector = pointPillarsObjectDetector(pointCloudRange,classNames,anchorBoxes,...
         'VoxelSize',voxelSize,'NumPillars',P,'NumPointsPerPillar',N);
-    
     
     if canUseParallelPool
         dispatchInBackground = true;
@@ -144,9 +142,9 @@ if doTraining
         'BatchNormalizationStatistics','moving',...
         'ResetInputNormalization',false,...
         'CheckpointPath',tempdir);
-
+    
     [detector,info] = trainPointPillarsObjectDetector(cdsAugmented,detector,options);
-
+    
     outputFile = fullfile(outputFolderDatabase, "WalkStandCrouch_Detector_134_V2.mat");
     save(outputFile, "detector");
     disp("Detector finished training");
