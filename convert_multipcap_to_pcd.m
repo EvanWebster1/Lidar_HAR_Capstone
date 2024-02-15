@@ -1,16 +1,16 @@
 %TODO: add method for emptying output folder before creating new files
 
-
-outputFolder = fullfile('C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE');
 %Saving the PCD files of the data
-pcdfolder = fullfile(outputFolder, '\Database\my_Lidar\')
+pcdfolder = fullfile(pwd, '\Database\my_Lidar\')
 %Reading the lidar file
 
 %creates the full path to read from
-lidarPath = fullfile(outputFolder,'\Database\Data\');
+lidarPath = fullfile(pwd,'\Database\Data\');
 lidarData = dir(lidarPath);
 
 lidarCount = 0
+
+
 for i = 3:size(lidarData)
 
     lidarFilePath = append(lidarPath,lidarData(i).name);
@@ -30,6 +30,7 @@ for i = 3:size(lidarData)
     while(hasFrame(veloReader) && player.isOpen())
         ptCloud = readFrame(veloReader,frame);
         ptCloud = pointCloud(reshape(ptCloud.Location, [],3), 'Intensity',single(reshape(ptCloud.Intensity, [],1)));
+
         name = sprintf('frame%04d.pcd',frame+lidarCount);
         pcwrite(ptCloud, fullfile(pcdfolder,name));
         frame=frame+1;
