@@ -4,11 +4,17 @@
 %%
 doTraining = true;
 canUseParallelPool = false;
+dataIsReady = true;
 
-outputFolderDatabase = fullfile(pwd,'\Database\');
+outputFolder= 'C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Pandaset';
+outputFolderDatabase= 'C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\Database\';
 
-%Load Label Data-----------------------------------------------------------
-%creates the full path to read from
+%if(~dataIsReady)
+%Load Data------------------------------------------------------------
+disp("Load Data")
+path = fullfile(outputFolderDatabase,'my_Lidar');
+lidarData = fileDatastore(path,'ReadFcn',@(x) pcread(x));
+
 labelPath = fullfile(outputFolderDatabase,'Labels\');
 labelData = dir(labelPath);
 boxLabels = {};
@@ -17,19 +23,37 @@ for i = 3:size(labelData)
     data = load(labelFilePath,'gTruth');
 
     Labels = timetable2table(data.gTruth.LabelData);
-    
-    newBoxLabels = Labels(:,2:4);
+    newBoxLabels = Labels(:,2:end);
     boxLabels = [boxLabels;newBoxLabels];
 end
 
-
 %Remove Empty Columns/Lables---------------------------------
-[boxLabels, removedColumns] = removeZeroColumns(boxLabels)
+disp("Remove Empty Columns/Lables")
+%[boxLabels, removedColumns] = removeZeroColumns(boxLabels)
 
-classNames = trainLabels.Properties.VariableNames;
-commonIndices = ismember(classNames, removedColumns);
-classNames(commonIndices) = [];
-%Load LiDAR Data-----------------------------------------------------------
+classNames = boxLabels.Properties.VariableNames;
+%commonIndices = ismember(classNames, removedColumns);
+%classNames(commonIndices) = [];
+
+labelCounts = [];
+for i = 1:width(boxLabels)
+    count = 0;
+    for j = 1:height(boxLabels)
+        if(isstruct(cell2table(boxLabels{j,i}).Var1))
+            boxLabels{j,i} = {cell2table(boxLabels{j,i}).Var1.Position};
+        end
+        if(sum(cell2mat(boxLabels{j,i})) ~= 0)
+            count = count + 1;
+        end
+    end
+    labelCounts(i) = count;
+end
+% Display the results
+
+activityTable = table(classNames', labelCounts', (labelCounts/height(boxLabels))', 'VariableNames', {'Activity', 'Count', 'Percent of Total'});
+disp(activityTable)
+%Preprocess Data-----------------------------------------------------------
+disp("Preprocess Data")
 xMin = 0.0;     % Minimum value along X-axis.
 yMin = -39.68;  % Minimum value along Y-axis.
 zMin = -5.0;    % Minimum value along Z-axis.
@@ -48,55 +72,46 @@ Yn = round(((yMax - yMin)/yStep));
 pointCloudRange = [xMin xMax yMin yMax zMin zMax];
 voxelSize = [xStep yStep];
 
-lidarPath = fullfile(outputFolderDatabase,'Data\');
-lidarDataFiles = dir(lidarPath);
-
-processedPointCloud = {};
-for i = 3:size(lidarDataFiles)
-
+numFrames = size(boxLabels,1);
+processedPointCloud = cell(numFrames, 1);
+processedLabels = boxLabels;
+for i = 1:numFrames
+    
     lidarFilePath = append(lidarPath,lidarDataFiles(i).name);
 
     lidarData = load(lidarFilePath,"processedPointCloud");
 
     processedPointCloud = vertcat(processedPointCloud,lidarData.processedPointCloud);
-    
-
 end
 %Create Datastore Objects for Training-------------------------------------
-
+disp("Create Datastore Objects for Training")
 rng(1);
-shuffledIndices = randperm(size(boxLabels,1));
+shuffledIndices = randperm(size(processedLabels,1));
 idx = floor(0.7 * length(shuffledIndices));
 
 trainData = processedPointCloud(shuffledIndices(1:idx),:);
 testData = processedPointCloud(shuffledIndices(idx+1:end),:);
+trainLabels = processedLabels(shuffledIndices(1:idx),:);
+testLabels = processedLabels(shuffledIndices(idx+1:end),:);
 
-trainLabels = boxLabels(shuffledIndices(1:idx),:);
-testLabels = boxLabels(shuffledIndices(idx+1:end),:);
 
-writeFiles = true;
 dataLocation = fullfile(outputFolderDatabase,'my_InputData');
-[trainData,trainLabels] = saveptCldToPCD(trainData,trainLabels,...
-    dataLocation,writeFiles);
 
+if(~dataIsReady)
+    writeFiles = true;
+    [trainData,trainLabels] = saveptCldToPCD(trainData,trainLabels,...
+        dataLocation,writeFiles);
+end
 lds = fileDatastore(dataLocation,'ReadFcn',@(x) pcread(x));
-
 bds = boxLabelDatastore(trainLabels);
-
 cds = combine(lds,bds);
 
 %Data Augmentation---------------------------------------------------------
-%sampleLocation = fullfile(outputFolderDatabase,'my_GTsamples');
-%[ldsSampled,bdsSampled] = sampleLidarData(cds,classNames,'MinPoints',20,'Verbose',false,'WriteLocation',sampleLocation);
-%cdsSampled = combine(ldsSampled,bdsSampled);
-
-%numObjects = 4;
-%cdsAugmented = transform(cds,@(x)pcBboxOversample(x,cdsSampled,classNames,numObjects));
-
-%cdsAugmented = transform(cdsAugmented,@(x)augmentData(x));
+disp("Data Augmentation")
 cdsAugmented = cds;
-
+ 
 %Create PointPillars Object Detector---------------------------------------
+disp("Create PointPillars Object Detector")
 % Define the number of prominent pillars.
 P = 12000; 
 
@@ -109,6 +124,7 @@ detector = pointPillarsObjectDetector(pointCloudRange,classNames,anchorBoxes,...
     'VoxelSize',voxelSize,'NumPillars',P,'NumPointsPerPillar',N);
 
 %Train Pointpillars Object Detector----------------------------------------
+disp("Train Pointpillars Object Detector")
 executionEnvironment = "auto";
 if canUseParallelPool
     dispatchInBackground = true;
@@ -135,40 +151,27 @@ options = trainingOptions('adam',...
 if doTraining    
     [detector,info] = trainPointPillarsObjectDetector(cdsAugmented,detector,options);
 
-    outputFile = fullfile(outputFolderDatabase, "my_trained_detector_2+3.mat");
+    outputFile = fullfile(outputFolderDatabase, "test.mat");
     save(outputFile, "detector");
 else
-    pretrainedDetector = load('C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Pandaset\my_trained_detector.mat','detector');
+    pretrainedDetector = load('C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\my_trained_detector.mat','detector');
     detector = pretrainedDetector.detector;
 end
 
 
 
-%Generate Detections-------------------------------------------------------
-ptCloud = testData{45,1};
-gtLabels = testLabels(45,:);
-
-% Specify the confidence threshold to use only detections with
-% confidence scores above this value.
-confidenceThreshold = 0.5;
-[box,score,labels] = detect(detector,ptCloud,'Threshold',confidenceThreshold);
-
-boxlabelsHuman = box(labels'=='Human',:);
-
-% Display the predictions on the point cloud.
-
-helperDisplay3DBoxesOverlaidHuman(ptCloud.Location,boxlabelsHuman,'green','After Data Augmentation');
 
 %Evaluate Detector Using Test Set------------------------------------------
-numInputs = 50;
+disp("Evaluate Detector Using Test Set")
+numInputs = 100;
 
 % Generate rotated rectangles from the cuboid labels.
 bds = boxLabelDatastore(testLabels(1:numInputs,:));
 groundTruthData = transform(bds,@(x)createRotRect(x));
-
+disp(bds(:,2))
 % Set the threshold values.
 nmsPositiveIoUThreshold = 0.5;
-confidenceThreshold = 0.25;
+confidenceThreshold = 0.5;
 
 detectionResults = detect(detector,testData(1:numInputs,:),...
     'Threshold',confidenceThreshold);
@@ -179,7 +182,6 @@ for i = 1:height(detectionResults)
     box = detectionResults.Boxes{i};
     detectionResults.Boxes{i} = box(:,[1,2,4,5,9]);
 end
-
 metrics = evaluateDetectionAOS(detectionResults,groundTruthData,...
     nmsPositiveIoUThreshold);
 disp(metrics(:,1:2))
@@ -222,7 +224,7 @@ function [newTable, removedColumns] = removeZeroColumns(inputTable)
     % Iterate through each variable (column) of the input table
     for col = 1:width(inputTable)
         % Check if all elements in the current column are empty or 0x0 doubles
-        if all(cellfun('isempty', inputTable{:, col}) | cellfun(@(x) all(x == 0), inputTable{:, col}));
+        if all(cellfun('isempty', inputTable{:, col}) | cellfun(@(x) all(x == 0), inputTable{:, col}))
             % Record the name of the removed column
             removedColumns = [removedColumns, inputTable.Properties.VariableNames{col}];
             % Remove the column from the new table
