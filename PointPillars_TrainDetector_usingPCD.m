@@ -6,7 +6,7 @@ doTraining = true;
 canUseParallelPool = false;
 dataIsReady = true;
 
-outputFolder= 'C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Pandaset';
+outputFolder= 'C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\';
 outputFolderDatabase= 'C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\Database\';
 
 %if(~dataIsReady)
@@ -72,13 +72,46 @@ Yn = round(((yMax - yMin)/yStep));
 pointCloudRange = [xMin xMax yMin yMax zMin zMax];
 voxelSize = [xStep yStep];
 
-numFrames = size(boxLabels,1);
-processedPointCloud = cell(numFrames, 1);
-processedLabels = boxLabels;
-for i = 1:numFrames
-    
-    processedPointCloud{i,1} = read(lidarData);
+
+
+outputFileName = "preProcLidarData.mat"
+
+doReadIn = true; 
+if isfile(outputFileName)
+     % File exists.
+    lidarFilePath = append(outputFolder ,outputFileName);
+    lidar = load(lidarFilePath,"processedPointCloud");
+    processedPointCloud = lidar.processedPointCloud;
+    if(size(processedPointCloud,1) == size(boxLabels,1))
+        doReadIn = false;
+    end
 end
+if (doReadIn)
+    numFrames = size(boxLabels,1);
+    processedPointCloud = cell(numFrames, 1);
+    processedLabels = boxLabels;
+    for i = 1:numFrames
+        
+        processedPointCloud{i,1} = read(lidarData);
+    end
+    
+    save(outputFileName, 'processedPointCloud','-v7.3');
+end
+
+% 
+% 
+% 
+% numFrames = size(boxLabels,1);
+% processedPointCloud = cell(numFrames, 1);
+% processedLabels = boxLabels;
+% for i = 1:numFrames
+% 
+%     processedPointCloud{i,1} = read(lidarData);
+% end
+% 
+% 
+% save(outputFileName, 'processedPointCloud','-v7.3');
+
 %Create Datastore Objects for Training-------------------------------------
 disp("Create Datastore Objects for Training")
 rng(1);

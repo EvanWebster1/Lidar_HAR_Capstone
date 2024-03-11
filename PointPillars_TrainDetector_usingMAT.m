@@ -4,7 +4,7 @@
 %%
 doTraining = true;
 canUseParallelPool = false;
-dataIsReady = true;
+dataIsReady = false;
 
 outputFolder= 'C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Pandaset';
 outputFolderDatabase= 'C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\Database\';
@@ -12,8 +12,8 @@ outputFolderDatabase= 'C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capsto
 %if(~dataIsReady)
 %Load Data------------------------------------------------------------
 disp("Load Data")
-path = fullfile(outputFolderDatabase,'my_Lidar');
-lidarData = fileDatastore(path,'ReadFcn',@(x) pcread(x));
+path = fullfile(outputFolderDatabase,'my_Lidar\');
+
 
 labelPath = fullfile(outputFolderDatabase,'Labels\');
 labelData = dir(labelPath);
@@ -72,16 +72,18 @@ Yn = round(((yMax - yMin)/yStep));
 pointCloudRange = [xMin xMax yMin yMax zMin zMax];
 voxelSize = [xStep yStep];
 
-numFrames = size(boxLabels,1);
-processedPointCloud = cell(numFrames, 1);
+processedPointCloud = {};
 processedLabels = boxLabels;
-for i = 1:numFrames
+
+lidarDataFiles = dir(path);
+for i = 3:size(lidarDataFiles)
     
-    lidarFilePath = append(lidarPath,lidarDataFiles(i).name);
+    lidarFilePath = append(path,lidarDataFiles(i).name);
 
     lidarData = load(lidarFilePath,"processedPointCloud");
-
+    disp(lidarData.processedPointCloud{1})
     processedPointCloud = vertcat(processedPointCloud,lidarData.processedPointCloud);
+
 end
 %Create Datastore Objects for Training-------------------------------------
 disp("Create Datastore Objects for Training")
