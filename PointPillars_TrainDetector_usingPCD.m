@@ -3,8 +3,9 @@
 %disp(data.gTruth.LabelData);
 %%
 doTraining = true;
-canUseParallelPool = false;
-dataIsReady = true;
+canUseParallelPool = true;
+dataIsReady = false;
+doSmush = false;
 
 outputFolder= 'C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\';
 outputFolderDatabase= 'C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\Database\';
@@ -72,10 +73,8 @@ Yn = round(((yMax - yMin)/yStep));
 pointCloudRange = [xMin xMax yMin yMax zMin zMax];
 voxelSize = [xStep yStep];
 
-
-
 outputFileName = "preProcLidarData.mat"
-
+processedLabels = boxLabels;
 doReadIn = true; 
 if isfile(outputFileName)
      % File exists.
@@ -89,7 +88,7 @@ end
 if (doReadIn)
     numFrames = size(boxLabels,1);
     processedPointCloud = cell(numFrames, 1);
-    processedLabels = boxLabels;
+    
     for i = 1:numFrames
         
         processedPointCloud{i,1} = read(lidarData);
@@ -98,19 +97,23 @@ if (doReadIn)
     save(outputFileName, 'processedPointCloud','-v7.3');
 end
 
-% 
-% 
-% 
-% numFrames = size(boxLabels,1);
-% processedPointCloud = cell(numFrames, 1);
-% processedLabels = boxLabels;
-% for i = 1:numFrames
-% 
-%     processedPointCloud{i,1} = read(lidarData);
-% end
-% 
-% 
-% save(outputFileName, 'processedPointCloud','-v7.3');
+preFrames = 2
+numFrames = size(boxLabels,1);
+%smush pointClouds
+if(doSmush)
+    for i = preFrames+1:numFrames
+        currFrame = processedPointCloud{preFrames+1,1};
+        for j = 1:preFrames
+            backFrame = processedPointCloud{preFrames+1-j,1};
+            currFrame = pcmerge(currFrame, backFrame, 1);
+        end
+        newPCArray{i,1} = currFrame;
+    end
+    processedPointCloud = newPCArray;
+    processedLabels = processedLabels(preFrames+1:end, :);
+
+end
+
 
 %Create Datastore Objects for Training-------------------------------------
 disp("Create Datastore Objects for Training")
@@ -137,6 +140,7 @@ cds = combine(lds,bds);
 
 %Data Augmentation---------------------------------------------------------
 disp("Data Augmentation")
+
 cdsAugmented = cds;
  
 %Create PointPillars Object Detector---------------------------------------
@@ -154,7 +158,7 @@ detector = pointPillarsObjectDetector(pointCloudRange,classNames,anchorBoxes,...
 
 %Train Pointpillars Object Detector----------------------------------------
 disp("Train Pointpillars Object Detector")
-executionEnvironment = "auto";
+executionEnvironment = "gpu";
 if canUseParallelPool
     dispatchInBackground = true;
 else
@@ -163,13 +167,13 @@ end
 
 options = trainingOptions('adam',...
     'Plots',"none",...
-    'MaxEpochs',60,...
+    'MaxEpochs',5,...
     'MiniBatchSize',3,...
     'GradientDecayFactor',0.9,...
     'SquaredGradientDecayFactor',0.999,...
     'LearnRateSchedule',"piecewise",...
     'InitialLearnRate',0.0002,...
-    'LearnRateDropPeriod',15,...
+    'LearnRateDropPeriod',2,...
     'LearnRateDropFactor',0.8,...
     'ExecutionEnvironment',executionEnvironment,...
     'DispatchInBackground',dispatchInBackground,...
@@ -180,10 +184,11 @@ options = trainingOptions('adam',...
 if doTraining    
     [detector,info] = trainPointPillarsObjectDetector(cdsAugmented,detector,options);
 
-    outputFile = fullfile(outputFolderDatabase, "test.mat");
+    outputFile = fullfile(outputFolderDatabase, "my_trained_detector.mat");
     save(outputFile, "detector");
 else
-    pretrainedDetector = load('C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\my_trained_detector.mat','detector');
+    outputFile = fullfile(outputFolderDatabase, "my_trained_detector.mat");
+    pretrainedDetector = load(outputFile,'detector');
     detector = pretrainedDetector.detector;
 end
 
@@ -192,14 +197,29 @@ end
 
 %Evaluate Detector Using Test Set------------------------------------------
 disp("Evaluate Detector Using Test Set")
-numInputs = 100;
+numInputs = 150;
 
 % Generate rotated rectangles from the cuboid labels.
 bds = boxLabelDatastore(testLabels(1:numInputs,:));
 groundTruthData = transform(bds,@(x)createRotRect(x));
-disp(bds(:,2))
+
+
+%disp(bds.LabelData(:,2))
+testValues = cell2table(bds.LabelData(:,2));
+testValues = string(table2array(testValues).');
+
+categories = unique(testValues);
+data_categorical = categorical(testValues);
+
+% Count occurrences
+occurrences = histcounts(data_categorical);
+disp('Categories:');
+disp(categories);
+disp('Occurrences:');
+disp(occurrences);
+
 % Set the threshold values.
-nmsPositiveIoUThreshold = 0.5;
+nmsPositiveIoUThreshold = 0.25;
 confidenceThreshold = 0.5;
 
 detectionResults = detect(detector,testData(1:numInputs,:),...
