@@ -107,7 +107,7 @@ if(doSmush)
             backFrame = processedPointCloud{preFrames+1-j,1};
             currFrame = pcmerge(currFrame, backFrame, 1);
         end
-        newPCArray{i,1} = currFrame;
+        newPCArray{i-preFrames,1} = currFrame;
     end
     processedPointCloud = newPCArray;
     processedLabels = processedLabels(preFrames+1:end, :);
@@ -119,11 +119,11 @@ end
 disp("Create Datastore Objects for Training")
 rng(1);
 shuffledIndices = randperm(size(processedLabels,1));
-idx = floor(0.7 * length(shuffledIndices));
+idx = floor(0.5 * length(shuffledIndices));
 
-trainData = processedPointCloud(shuffledIndices(1:idx),:);
+trainData = processedPointCloud(shuffledIndices(100:idx),:);
 testData = processedPointCloud(shuffledIndices(idx+1:end),:);
-trainLabels = processedLabels(shuffledIndices(1:idx),:);
+trainLabels = processedLabels(shuffledIndices(100:idx),:);
 testLabels = processedLabels(shuffledIndices(idx+1:end),:);
 
 
@@ -167,13 +167,13 @@ end
 
 options = trainingOptions('adam',...
     'Plots',"none",...
-    'MaxEpochs',5,...
+    'MaxEpochs',20,...
     'MiniBatchSize',3,...
     'GradientDecayFactor',0.9,...
     'SquaredGradientDecayFactor',0.999,...
     'LearnRateSchedule',"piecewise",...
     'InitialLearnRate',0.0002,...
-    'LearnRateDropPeriod',2,...
+    'LearnRateDropPeriod',5,...
     'LearnRateDropFactor',0.8,...
     'ExecutionEnvironment',executionEnvironment,...
     'DispatchInBackground',dispatchInBackground,...
@@ -184,10 +184,10 @@ options = trainingOptions('adam',...
 if doTraining    
     [detector,info] = trainPointPillarsObjectDetector(cdsAugmented,detector,options);
 
-    outputFile = fullfile(outputFolderDatabase, "my_trained_detector.mat");
+    outputFile = fullfile(outputFolderDatabase, "my_trained_detector_NoSmush_WSS.mat");
     save(outputFile, "detector");
 else
-    outputFile = fullfile(outputFolderDatabase, "my_trained_detector.mat");
+    outputFile = fullfile(outputFolderDatabase, "my_trained_detector_NoSmush_WSS.mat");
     pretrainedDetector = load(outputFile,'detector');
     detector = pretrainedDetector.detector;
 end
@@ -220,7 +220,7 @@ disp(occurrences);
 
 % Set the threshold values.
 nmsPositiveIoUThreshold = 0.25;
-confidenceThreshold = 0.5;
+confidenceThreshold = 0.25;
 
 detectionResults = detect(detector,testData(1:numInputs,:),...
     'Threshold',confidenceThreshold);
@@ -228,6 +228,8 @@ detectionResults = detect(detector,testData(1:numInputs,:),...
 % Convert the bounding boxes to rotated rectangles format and calculate
 % the evaluation metrics.
 for i = 1:height(detectionResults)
+    disp(detectionResults.Boxes{i})
+    disp(detectionResults.Labels{i})
     box = detectionResults.Boxes{i};
     detectionResults.Boxes{i} = box(:,[1,2,4,5,9]);
 end
