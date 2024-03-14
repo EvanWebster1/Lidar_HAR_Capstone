@@ -3,9 +3,10 @@
 %disp(data.gTruth.LabelData);
 %%
 doTraining = true;
-canUseParallelPool = true;
-dataIsReady = false;
-doSmush = false;
+canUseParallelPool = false;
+dataIsReady = true;
+doSmush = true;
+doSmushV2 = false;
 
 outputFolder= 'C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\';
 outputFolderDatabase= 'C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\Database\';
@@ -97,17 +98,26 @@ if (doReadIn)
     save(outputFileName, 'processedPointCloud','-v7.3');
 end
 
-preFrames = 2
 numFrames = size(boxLabels,1);
 %smush pointClouds
 if(doSmush)
+    xlimits = [-6 6];
+    ylimits = [-8 8];
+    zlimits = [-2 2];
+    player = pcplayer(xlimits,ylimits,zlimits);
+
+    preFrames = 4
+
     for i = preFrames+1:numFrames
-        currFrame = processedPointCloud{preFrames+1,1};
+        currFrame = processedPointCloud{i,1};
         for j = 1:preFrames
-            backFrame = processedPointCloud{preFrames+1-j,1};
-            currFrame = pcmerge(currFrame, backFrame, 1);
+            disp(i-j)
+            backFrame = processedPointCloud{(i-j),1};
+            currFrame = pccat([currFrame;backFrame]);
         end
         newPCArray{i-preFrames,1} = currFrame;
+        view(player,currFrame)
+
     end
     processedPointCloud = newPCArray;
     processedLabels = processedLabels(preFrames+1:end, :);
@@ -115,15 +125,71 @@ if(doSmush)
 end
 
 
+if(doSmushV2)
+    xlimits = [-6 6];
+    ylimits = [-8 8];
+    zlimits = [-2 2];
+    player = pcplayer(xlimits,ylimits,zlimits);
+    for i = 1:numFrames
+        
+
+        for j = 1:size(processedLabels,2)
+            index = 1;
+            if( isempty(cell2mat(processedLabels{i,j})))
+                continue
+            end
+            %cell2mat(processedLabels{i,1})
+            %disp(cell2mat(processedLabels{i,1}))
+            %disp(processedPointCloud{i,1})
+            
+            test = processedPointCloud{i,1};
+            params = cell2mat(processedLabels{i,j});
+            model = cuboidModel(params);
+    
+            indices = findPointsInsideCuboid(model, test);
+            cubPtCloud = select(test,indices);
+            view(player,cubPtCloud)
+
+            roiPoints{i,index} = cubPtCloud;
+
+            index = index + 1;
+        end
+    end
+
+    preFrames = 4
+
+
+    for i = preFrames+1:numFrames
+        currFrame = processedPointCloud{i,1};
+        if(~isempty(roiPoints{i,1}))
+            for j = 1:preFrames
+                for k = 1:size(roiPoints{preFrames+1-j,:}, 2)
+                    backFrame = roiPoints{preFrames+i-j,k};
+                    currFrame = pcmerge(currFrame, backFrame, 1);
+                end
+            end
+        newPCArray{i-preFrames,1} = currFrame;
+        view(player,currFrame)
+        end
+        
+    end
+    processedPointCloud = newPCArray;
+    processedLabels = processedLabels(preFrames+1:end, :);
+
+end
+
+
+%processedLabels = [processedLabels;processedLabels;processedLabels;processedLabels;processedLabels;processedLabels];
+%processedPointCloud = [processedPointCloud;processedPointCloud;processedPointCloud;processedPointCloud;processedPointCloud;processedPointCloud];
 %Create Datastore Objects for Training-------------------------------------
 disp("Create Datastore Objects for Training")
 rng(1);
 shuffledIndices = randperm(size(processedLabels,1));
-idx = floor(0.5 * length(shuffledIndices));
+idx = floor(0.7 * length(shuffledIndices));
 
-trainData = processedPointCloud(shuffledIndices(100:idx),:);
+trainData = processedPointCloud(shuffledIndices(1:idx),:);
 testData = processedPointCloud(shuffledIndices(idx+1:end),:);
-trainLabels = processedLabels(shuffledIndices(100:idx),:);
+trainLabels = processedLabels(shuffledIndices(1:idx),:);
 testLabels = processedLabels(shuffledIndices(idx+1:end),:);
 
 
@@ -141,7 +207,17 @@ cds = combine(lds,bds);
 %Data Augmentation---------------------------------------------------------
 disp("Data Augmentation")
 
-cdsAugmented = cds;
+classNames = trainLabels.Properties.VariableNames;
+sampleLocation = fullfile(outputFolderDatabase,'my_GTsamples');
+[ldsSampled,bdsSampled] = sampleLidarData(cds,classNames,'MinPoints',20,...                  
+                            'Verbose',false,'WriteLocation',sampleLocation);
+cdsSampled = combine(ldsSampled,bdsSampled);
+
+numObjects = 1;
+cdsAugmented = transform(cds,@(x)pcBboxOversample(x,cdsSampled,classNames,numObjects));
+
+cdsAugmented = transform(cdsAugmented,@(x)augmentData(x));
+
  
 %Create PointPillars Object Detector---------------------------------------
 disp("Create PointPillars Object Detector")
@@ -167,19 +243,19 @@ end
 
 options = trainingOptions('adam',...
     'Plots',"none",...
-    'MaxEpochs',20,...
+    'MaxEpochs',10,...
     'MiniBatchSize',3,...
     'GradientDecayFactor',0.9,...
     'SquaredGradientDecayFactor',0.999,...
     'LearnRateSchedule',"piecewise",...
     'InitialLearnRate',0.0002,...
-    'LearnRateDropPeriod',5,...
+    'LearnRateDropPeriod',3,...
     'LearnRateDropFactor',0.8,...
     'ExecutionEnvironment',executionEnvironment,...
     'DispatchInBackground',dispatchInBackground,...
     'BatchNormalizationStatistics','moving',...
     'ResetInputNormalization',false,...
-    'CheckpointPath',tempdir);
+    'CheckpointPath',"C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\temp\");
 
 if doTraining    
     [detector,info] = trainPointPillarsObjectDetector(cdsAugmented,detector,options);
@@ -197,7 +273,7 @@ end
 
 %Evaluate Detector Using Test Set------------------------------------------
 disp("Evaluate Detector Using Test Set")
-numInputs = 150;
+numInputs = 50;
 
 % Generate rotated rectangles from the cuboid labels.
 bds = boxLabelDatastore(testLabels(1:numInputs,:));
@@ -228,8 +304,6 @@ detectionResults = detect(detector,testData(1:numInputs,:),...
 % Convert the bounding boxes to rotated rectangles format and calculate
 % the evaluation metrics.
 for i = 1:height(detectionResults)
-    disp(detectionResults.Boxes{i})
-    disp(detectionResults.Labels{i})
     box = detectionResults.Boxes{i};
     detectionResults.Boxes{i} = box(:,[1,2,4,5,9]);
 end
