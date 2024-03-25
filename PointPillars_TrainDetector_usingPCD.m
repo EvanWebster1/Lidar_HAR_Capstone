@@ -3,11 +3,13 @@
 %disp(data.gTruth.LabelData);
 %%
 doTraining = true;
-canUseParallelPool = false;
-dataIsReady = true;
-doSmush = true;
+canUseParallelPool = true;
+dataIsReady = false;
+doSmush = false;
 doSmushV2 = false;
-
+doSmushV3 = false;
+doSmushV4 = false;
+preFrames = 5
 outputFolder= 'C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\';
 outputFolderDatabase= 'C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\Database\';
 
@@ -57,11 +59,11 @@ disp(activityTable)
 %Preprocess Data-----------------------------------------------------------
 disp("Preprocess Data")
 xMin = 0.0;     % Minimum value along X-axis.
-yMin = -39.68;  % Minimum value along Y-axis.
-zMin = -5.0;    % Minimum value along Z-axis.
-xMax = 69.12;   % Maximum value along X-axis.
-yMax = 39.68;   % Maximum value along Y-axis.
-zMax = 5.0;     % Maximum value along Z-axis.
+yMin = -19.84;  % Minimum value along Y-axis.
+zMin = -2.5;    % Minimum value along Z-axis.
+xMax = 34.56;   % Maximum value along X-axis.
+yMax = 19.84;   % Maximum value along Y-axis.
+zMax = 2.5;     % Maximum value along Z-axis.
 xStep = 0.16;   % Resolution along X-axis.
 yStep = 0.16;   % Resolution along Y-axis.
 dsFactor = 2.0; % Downsampling factor.
@@ -93,6 +95,9 @@ if (doReadIn)
     for i = 1:numFrames
         
         processedPointCloud{i,1} = read(lidarData);
+        roi = [-4.6 6.3 -1.15 9.55 -1 3];
+        indices = findPointsInROI(processedPointCloud{i,1},roi);
+        processedPointCloud{i,1} = select(processedPointCloud{i,1},indices);
     end
     
     save(outputFileName, 'processedPointCloud','-v7.3');
@@ -105,8 +110,6 @@ if(doSmush)
     ylimits = [-8 8];
     zlimits = [-2 2];
     player = pcplayer(xlimits,ylimits,zlimits);
-
-    preFrames = 4
 
     for i = preFrames+1:numFrames
         currFrame = processedPointCloud{i,1};
@@ -156,16 +159,13 @@ if(doSmushV2)
         end
     end
 
-    preFrames = 4
-
-
     for i = preFrames+1:numFrames
         currFrame = processedPointCloud{i,1};
         if(~isempty(roiPoints{i,1}))
             for j = 1:preFrames
                 for k = 1:size(roiPoints{preFrames+1-j,:}, 2)
-                    backFrame = roiPoints{preFrames+i-j,k};
-                    currFrame = pcmerge(currFrame, backFrame, 1);
+                    backFrame = roiPoints{i-j,k};
+                    currFrame = pccat([currFrame;backFrame]);
                 end
             end
         newPCArray{i-preFrames,1} = currFrame;
@@ -178,10 +178,144 @@ if(doSmushV2)
 
 end
 
+if(doSmushV3)
+    xlimits = [-6 6];
+    ylimits = [-8 8];
+    zlimits = [-2 2];
+    player = pcplayer(xlimits,ylimits,zlimits);
+    for i = 1:numFrames
+        
+
+        for j = 1:size(processedLabels,2)
+            index = 1;
+            if( isempty(cell2mat(processedLabels{i,j})))
+                continue
+            end
+            %cell2mat(processedLabels{i,1})
+            %disp(cell2mat(processedLabels{i,1}))
+            %disp(processedPointCloud{i,1})
+            
+            test = processedPointCloud{i,1};
+            params = cell2mat(processedLabels{i,j});
+            model = cuboidModel(params);
+    
+            indices = findPointsInsideCuboid(model, test);
+            cubPtCloud = select(test,indices);
+            %view(player,cubPtCloud)
+
+            roiPoints{i,index} = cubPtCloud;
+
+            index = index + 1;
+        end
+    end
+
+    
+    
+    for i = (preFrames+1):numFrames
+        testThing = [];
+        currFrame = processedPointCloud{i,1};
+        if(~isempty(roiPoints{i,1}))
+            non_empty_cells = cellfun(@(x) ~isempty(x), processedLabels{i,:});
+            targetLabel = find(non_empty_cells);
+
+            for j = 1:preFrames
+                for k = 1:size(roiPoints{preFrames+1-j,:}, 2)
+
+                    non_empty_cells = cellfun(@(x) ~isempty(x), processedLabels{i-j,:});
+                    prevFrameLabel = find(non_empty_cells);
+
+
+                    if (targetLabel == prevFrameLabel)
+                        testThing(j) = prevFrameLabel;
+                        backFrame = roiPoints{i-j,k};
+                        currFrame = pccat([currFrame;backFrame]);
+                    end
+                end
+            end
+        %disp(testThing)
+        newPCArray{i-preFrames,1} = currFrame;
+        %view(player,currFrame)
+        end
+        
+    end
+    processedPointCloud = newPCArray;
+    processedLabels = processedLabels(preFrames+1:end, :);
+
+end
+
+if(doSmushV4)
+    xlimits = [-6 6];
+    ylimits = [-8 8];
+    zlimits = [-2 2];
+    %player = pcplayer(xlimits,ylimits,zlimits);
+    for i = 1:numFrames
+        
+
+        for j = 1:size(processedLabels,2)
+            index = 1;
+            if( isempty(cell2mat(processedLabels{i,j})))
+                continue
+            end
+            %cell2mat(processedLabels{i,1})
+            %disp(cell2mat(processedLabels{i,1}))
+            %disp(processedPointCloud{i,1})
+            
+            test = processedPointCloud{i,1};
+            params = cell2mat(processedLabels{i,j});
+            model = cuboidModel(params);
+    
+            indices = findPointsInsideCuboid(model, test);
+            cubPtCloud = select(test,indices);
+            %view(player,cubPtCloud)
+
+            roiPoints{i,index} = cubPtCloud;
+
+            index = index + 1;
+        end
+    end
+    
+
+    optimalPrevFrame = [0 5 5 5 6 4];
+    preFrames = max(optimalPrevFrame);
+    %kvPairs = containers.Map(cat, optimalPrevFrame)
+
+    for i = (preFrames+1):numFrames
+        testThing = [];
+        currFrame = processedPointCloud{i,1};
+        if(~isempty(roiPoints{i,1}))
+            non_empty_cells = cellfun(@(x) ~isempty(x), processedLabels{i,:});
+            targetLabel = find(non_empty_cells);
+            preFramesOpt = optimalPrevFrame(targetLabel);
+            for j = 1:preFramesOpt
+                for k = 1:size(roiPoints{preFramesOpt+1-j,:}, 2)
+
+                    non_empty_cells = cellfun(@(x) ~isempty(x), processedLabels{i-j,:});
+                    prevFrameLabel = find(non_empty_cells);
+
+
+                    if (targetLabel == prevFrameLabel)
+                        testThing(j) = prevFrameLabel;
+                        backFrame = roiPoints{i-j,k};
+                        currFrame = pccat([currFrame;backFrame]);
+                    end
+                end
+            end
+        %disp(testThing)
+        newPCArray{i-preFrames,1} = currFrame;
+        %view(player,currFrame)
+        end
+        
+    end
+    processedPointCloud = newPCArray;
+    processedLabels = processedLabels(preFrames+1:end, :);
+
+end
+
 
 %processedLabels = [processedLabels;processedLabels;processedLabels;processedLabels;processedLabels;processedLabels];
 %processedPointCloud = [processedPointCloud;processedPointCloud;processedPointCloud;processedPointCloud;processedPointCloud;processedPointCloud];
 %Create Datastore Objects for Training-------------------------------------
+
 disp("Create Datastore Objects for Training")
 rng(1);
 shuffledIndices = randperm(size(processedLabels,1));
@@ -200,23 +334,14 @@ if(~dataIsReady)
     [trainData,trainLabels] = saveptCldToPCD(trainData,trainLabels,...
         dataLocation,writeFiles);
 end
-lds = fileDatastore(dataLocation,'ReadFcn',@(x) pcread(x));
+lds = fileDatastore(dataLocation,'ReadFcn',@(x)pcread(x));
 bds = boxLabelDatastore(trainLabels);
 cds = combine(lds,bds);
 
 %Data Augmentation---------------------------------------------------------
 disp("Data Augmentation")
 
-classNames = trainLabels.Properties.VariableNames;
-sampleLocation = fullfile(outputFolderDatabase,'my_GTsamples');
-[ldsSampled,bdsSampled] = sampleLidarData(cds,classNames,'MinPoints',20,...                  
-                            'Verbose',false,'WriteLocation',sampleLocation);
-cdsSampled = combine(ldsSampled,bdsSampled);
-
-numObjects = 1;
-cdsAugmented = transform(cds,@(x)pcBboxOversample(x,cdsSampled,classNames,numObjects));
-
-cdsAugmented = transform(cdsAugmented,@(x)augmentData(x));
+cdsAugmented = cds;
 
  
 %Create PointPillars Object Detector---------------------------------------
@@ -243,13 +368,13 @@ end
 
 options = trainingOptions('adam',...
     'Plots',"none",...
-    'MaxEpochs',10,...
-    'MiniBatchSize',3,...
+    'MaxEpochs',40,...
+    'MiniBatchSize',8,...
     'GradientDecayFactor',0.9,...
     'SquaredGradientDecayFactor',0.999,...
     'LearnRateSchedule',"piecewise",...
     'InitialLearnRate',0.0002,...
-    'LearnRateDropPeriod',3,...
+    'LearnRateDropPeriod',10,...
     'LearnRateDropFactor',0.8,...
     'ExecutionEnvironment',executionEnvironment,...
     'DispatchInBackground',dispatchInBackground,...
@@ -260,10 +385,10 @@ options = trainingOptions('adam',...
 if doTraining    
     [detector,info] = trainPointPillarsObjectDetector(cdsAugmented,detector,options);
 
-    outputFile = fullfile(outputFolderDatabase, "my_trained_detector_NoSmush_WSS.mat");
+    outputFile = fullfile(outputFolderDatabase, "my_trained_detector_Smush3_bigguy.mat");
     save(outputFile, "detector");
 else
-    outputFile = fullfile(outputFolderDatabase, "my_trained_detector_NoSmush_WSS.mat");
+    outputFile = fullfile(outputFolderDatabase, "my_trained_detector_Smush3_bigguy.mat");
     pretrainedDetector = load(outputFile,'detector');
     detector = pretrainedDetector.detector;
 end
@@ -273,12 +398,12 @@ end
 
 %Evaluate Detector Using Test Set------------------------------------------
 disp("Evaluate Detector Using Test Set")
-numInputs = 50;
+numInputs = 300;
 
 % Generate rotated rectangles from the cuboid labels.
 bds = boxLabelDatastore(testLabels(1:numInputs,:));
 groundTruthData = transform(bds,@(x)createRotRect(x));
-
+%disp(testLabels(1:numInputs,:))
 
 %disp(bds.LabelData(:,2))
 testValues = cell2table(bds.LabelData(:,2));
@@ -289,17 +414,37 @@ data_categorical = categorical(testValues);
 
 % Count occurrences
 occurrences = histcounts(data_categorical);
-disp('Categories:');
-disp(categories);
-disp('Occurrences:');
-disp(occurrences);
-
+disp("Testing Value Counts:")
+testTable = array2table(occurrences, 'VariableNames', categories);
+disp(testTable)
 % Set the threshold values.
 nmsPositiveIoUThreshold = 0.25;
 confidenceThreshold = 0.25;
 
 detectionResults = detect(detector,testData(1:numInputs,:),...
     'Threshold',confidenceThreshold);
+%disp(detectionResults)
+
+answerTable = testValues;
+resultsArray = zeros(size(categories));
+for i = 1:height(detectionResults)
+    [M,bestIndex] = max(detectionResults.Scores{i});
+    if(~isempty(bestIndex))
+        guessTable = detectionResults.Labels{i};
+        bestGuess = guessTable(bestIndex);
+        if(bestGuess == answerTable(i))
+            result = find(categories == answerTable(i));
+            resultsArray(result) = resultsArray(result)+1;
+        end
+    end
+end
+
+percentConfAcc = resultsArray./occurrences;
+disp("Percent of times highest confidence value was correct the label:")
+confAccTable = array2table(percentConfAcc, 'VariableNames', categories);
+disp(confAccTable);
+
+
 
 % Convert the bounding boxes to rotated rectangles format and calculate
 % the evaluation metrics.
@@ -309,7 +454,27 @@ for i = 1:height(detectionResults)
 end
 metrics = evaluateDetectionAOS(detectionResults,groundTruthData,...
     nmsPositiveIoUThreshold);
-disp(metrics(:,1:2))
+disp(metrics(:,1:end))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 %helper fuctions-----------------------------------------------------------
