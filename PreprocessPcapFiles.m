@@ -2,7 +2,7 @@
 %MAKE SURE THAT THE .pcap FILE IS IN THE SAME DIRECTORY AS THE CODE!
 
 %set this line to be the file you want to label:
-pcapFileName = "CaptureLidarHAR_Cap2";
+pcapFileName = "MitchCaps4";
 
 %set this to be the location you want to have the .pcd to output, make sure that it is in its own folder and that folder is empty
 pcdfolder = append(pwd,"\ProcessedPCD");
@@ -32,7 +32,7 @@ while(hasFrame(veloReader) && player.isOpen())
     ptCloud = readFrame(veloReader,frame);
     ptCloud = pointCloud(reshape(ptCloud.Location, [],3), 'Intensity',single(reshape(ptCloud.Intensity, [],1)));
 
-    roi = [-4.6 6.3 -1.15 9.55 -1 3];
+    roi = [0 34.56 -19.84 19.84 -2.5 2.5];
     indices = findPointsInROI(ptCloud,roi);
     ptCloud = select(ptCloud,indices);
     if(doShowVideo)

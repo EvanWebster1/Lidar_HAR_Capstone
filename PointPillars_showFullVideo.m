@@ -2,6 +2,7 @@
 %controlls:
 doEvaluate = false;
 doShowFullLidar = true;
+
 tic;
 % tic;
 %         elapsedTime = toc;
@@ -11,7 +12,7 @@ tic;
 
 close all
 
-outputFolder= 'C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Database\';
+outputFolder= 'C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\Database\';
 
 %Load Data------------------------------------------------------------
 
@@ -20,36 +21,28 @@ path = fullfile(outputFolder,'my_Lidar');
 lidarData = fileDatastore(path,'ReadFcn',@(x) pcread(x));
 
 %Preprocess Data-----------------------------------------------------------
+disp("here")
 i = 1;
 while(hasdata(lidarData))
-
-    ptCloud = read(lidarData);            
-    processedData = removeInvalidPoints(ptCloud);
-    processedPointCloud{i,1} = processedData;
+       
+        processedPointCloud{i,1} = read(lidarData);
+        roi = [-4.6 6.3 -1.15 9.55 -1 3];
+        indices = findPointsInROI(processedPointCloud{i,1},roi);
+        processedPointCloud{i,1} = select(processedPointCloud{i,1},indices);
     i = i + 1;
 
 end
-
+disp("here1")
 reset(lidarData);
 
 %Create Datastore Objects for Training-------------------------------------
 
 testData = processedPointCloud;
-testLabels = processedLabels;
+%testLabels = processedLabels;
 
-%Data Augmentation---------------------------------------------------------
-
-%Create PointPillars Object Detector---------------------------------------
-
-%Train Pointpillars Object Detector----------------------------------------
-
-
-
-
-
-pretrainedDetector = load('C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Database\plsdo3.mat','detector');
+pretrainedDetector = load('C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\Database\Trained Detectors\my_trained_detector_Smush2_40EP_5frame.mat','detector');
 detector = pretrainedDetector.detector;
-disp("here")
+disp("here2")
 
 %Generate Detections-------------------------------------------------------
 if doShowFullLidar
@@ -120,35 +113,108 @@ end
 
 
 function helperDisplay3DBoxesAndFullLidar2(pointCloudList, detector)
+doSmush = true;
+preFrames = 5;
+    xLim = [-4.6 6.3]
+    yLim = [-1.15 9.55]
+    zLim = [-1 3]
 
-    player = pcplayer([-2 10],[-5 5],[-2 2]);
+
+    if(doSmush)
+        xlimits = [-6 6];
+        ylimits = [-8 8];
+        zlimits = [-2 2];
+        player = pcplayer(xlimits,ylimits,zlimits);
+    
+        for i = preFrames+1:size(pointCloudList,1)
+            currFrame = pointCloudList{i,1};
+            for j = 1:preFrames
+                disp(i-j)
+                backFrame = pointCloudList{(i-j),1};
+                currFrame = pccat([currFrame;backFrame]);
+            end
+            newPCArray{i-preFrames,1} = currFrame;
+            view(player,currFrame)
+    
+        end
+        pointCloudList = newPCArray;
+   
+    end
+
+
+
+    player = pcplayer(xLim,yLim ,zLim);
     for i = 1:size(pointCloudList)
         ptCloud = pointCloudList{i,1};
 
         % Specify the confidence threshold to use only detections with
         % confidence scores above this value.
-        confidenceThreshold = 0.75;
-        [box,~,labels] = detect(detector,ptCloud,'Threshold',confidenceThreshold);
+        confidenceThreshold = 0.25;
+        [box,score,labels] = detect(detector,ptCloud,'Threshold',confidenceThreshold);
 
- 
+        disp(labels)
         % Display the predictions on the point cloud.
         
         view(player,ptCloud); 
-        for j = 1:size(labels,1)
-            boxlabels = box(labels'==labels(j),:);
-            switch labels(j)
-                case "Walking"
-                    labelColour = "green";
-                case "Standing"
-                    labelColour = "yellow";
-                case "Crouching"
-                    labelColour = "red";
-                otherwise
-                    labelColour = "purple";
-            end
+        %score(score==max(score)) = []
+        [M,bestIndex] = max(score);
 
-            showShape('cuboid',boxlabels,'Parent',player.Axes,'Opacity',0.1, ...
-                'Color',labelColour,'LineWidth',0.5, "Label",labels(j),"LabelOpacity",0.5);
+        %[y bestIndex] = min(abs(score)-median(score));
+
+        if(~isempty(bestIndex))
+            guessTable = labels;
+            bestGuess = guessTable(bestIndex);
+            bestBox = box(bestIndex,:);
+
+            switch bestGuess
+                case "Walking"
+                    labelColour = "red";
+                case "Standing"
+                    labelColour = "blue";
+                case "Squatting"
+                    labelColour = "cyan";
+                case "Jumping_Jacks"
+                    labelColour = "green";
+                case "Push_Ups"
+                    labelColour = "magenta";
+                case "Sit_Ups"
+                    labelColour = "yellow";
+
+                otherwise
+                    labelColour = "White";
+            end
+            
+            showShape('cuboid',bestBox,'Parent',player.Axes,'Opacity',0.1, ...
+                'Color',labelColour,'LineWidth',0.5, "Label",bestGuess,"LabelOpacity",0.5);
+            
+        end
+        if(false)
+            labelColour = [""];
+            for j = 1:size(box,1)
+    
+                boxlabels = box(j,:);
+                switch labels(j)
+                    case "Walking"
+                        labelColour(j) = "red";
+                    case "Standing"
+                        labelColour(j) = "blue";
+                    case "Squatting"
+                        labelColour(j) = "cyan";
+                    case "Jumping_Jacks"
+                        labelColour(j) = "green";
+                    case "Push_Ups"
+                        labelColour(j) = "magenta";
+                    case "Sit_Ups"
+                        labelColour(j) = "yellow";
+    
+                    otherwise
+                        labelColour(j) = "White";
+                end
+    
+            end
+            showShape('cuboid',box,'Parent',player.Axes,'Opacity',0.1, ...
+                    'Color',labelColour,'LineWidth',0.5, "Label",labels,"LabelOpacity",0.5);
+            disp(score)
         end
     end
 

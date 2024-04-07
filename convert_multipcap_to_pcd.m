@@ -27,6 +27,7 @@ for i = 3:size(lidarData)
     zlabel(player.Axes,'Z (m)');
     frame=1;
     %Display
+    
     while(hasFrame(veloReader) && player.isOpen())
         ptCloud = readFrame(veloReader,frame);
         ptCloud = pointCloud(reshape(ptCloud.Location, [],3), 'Intensity',single(reshape(ptCloud.Intensity, [],1)));

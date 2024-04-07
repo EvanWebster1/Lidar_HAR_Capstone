@@ -2,11 +2,11 @@
 %data=load('C:\Users\mzinc\OneDrive\Desktop\OSS CAPSTONE\Pandaset\my_Labels\Capture3_120_labels.mat')
 %disp(data.gTruth.LabelData);
 %%
-doTraining = true;
-canUseParallelPool = true;
+doTraining = false;
+canUseParallelPool = false;
 dataIsReady = false;
 doSmush = false;
-doSmushV2 = false;
+doSmushV2 = true;
 doSmushV3 = false;
 doSmushV4 = false;
 preFrames = 5
@@ -175,7 +175,7 @@ if(doSmushV2)
     end
     processedPointCloud = newPCArray;
     processedLabels = processedLabels(preFrames+1:end, :);
-
+    
 end
 
 if(doSmushV3)
@@ -300,7 +300,7 @@ if(doSmushV4)
                     end
                 end
             end
-        %disp(testThing)
+        % %disp(testThing
         newPCArray{i-preFrames,1} = currFrame;
         %view(player,currFrame)
         end
@@ -318,6 +318,7 @@ end
 
 disp("Create Datastore Objects for Training")
 rng(1);
+
 shuffledIndices = randperm(size(processedLabels,1));
 idx = floor(0.7 * length(shuffledIndices));
 
@@ -341,8 +342,16 @@ cds = combine(lds,bds);
 %Data Augmentation---------------------------------------------------------
 disp("Data Augmentation")
 
-cdsAugmented = cds;
+classNames = trainLabels.Properties.VariableNames;
+sampleLocation = fullfile(outputFolderDatabase,'my_GTsamples');
+[ldsSampled,bdsSampled] = sampleLidarData(cds,classNames,'MinPoints',20,...                  
+                            'Verbose',false,'WriteLocation',sampleLocation);
+cdsSampled = combine(ldsSampled,bdsSampled);
 
+numObjects = 1;
+cdsAugmented = transform(cds,@(x)pcBboxOversample(x,cdsSampled,classNames,numObjects));
+
+cdsAugmented = transform(cdsAugmented,@(x)augmentData(x));
  
 %Create PointPillars Object Detector---------------------------------------
 disp("Create PointPillars Object Detector")
@@ -368,13 +377,13 @@ end
 
 options = trainingOptions('adam',...
     'Plots',"none",...
-    'MaxEpochs',40,...
-    'MiniBatchSize',8,...
+    'MaxEpochs',60,...
+    'MiniBatchSize',3,...
     'GradientDecayFactor',0.9,...
     'SquaredGradientDecayFactor',0.999,...
     'LearnRateSchedule',"piecewise",...
     'InitialLearnRate',0.0002,...
-    'LearnRateDropPeriod',10,...
+    'LearnRateDropPeriod',20,...
     'LearnRateDropFactor',0.8,...
     'ExecutionEnvironment',executionEnvironment,...
     'DispatchInBackground',dispatchInBackground,...
@@ -383,12 +392,13 @@ options = trainingOptions('adam',...
     'CheckpointPath',"C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\temp\");
 
 if doTraining    
+   
     [detector,info] = trainPointPillarsObjectDetector(cdsAugmented,detector,options);
 
     outputFile = fullfile(outputFolderDatabase, "my_trained_detector_Smush3_bigguy.mat");
     save(outputFile, "detector");
 else
-    outputFile = fullfile(outputFolderDatabase, "my_trained_detector_Smush3_bigguy.mat");
+    outputFile = fullfile(outputFolderDatabase, "my_trained_detector_Smush2_3action.mat");
     pretrainedDetector = load(outputFile,'detector');
     detector = pretrainedDetector.detector;
 end
@@ -398,7 +408,7 @@ end
 
 %Evaluate Detector Using Test Set------------------------------------------
 disp("Evaluate Detector Using Test Set")
-numInputs = 300;
+numInputs = 2000;
 
 % Generate rotated rectangles from the cuboid labels.
 bds = boxLabelDatastore(testLabels(1:numInputs,:));
@@ -419,7 +429,7 @@ testTable = array2table(occurrences, 'VariableNames', categories);
 disp(testTable)
 % Set the threshold values.
 nmsPositiveIoUThreshold = 0.25;
-confidenceThreshold = 0.25;
+confidenceThreshold = 0.5;
 
 detectionResults = detect(detector,testData(1:numInputs,:),...
     'Threshold',confidenceThreshold);
