@@ -3,24 +3,27 @@ lidar = velodynelidar('VLP16');
 outputFolderDatabase = "C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\Database\Trained Detectors\"
 
 
-Do6Action = false;
+Do6Action = true;
 bestBoxesOnly = false;
+confidenceThreshold = 0.5;
 
-
+ %walk stand squat thresh: 0.3
+%6thresh: 0.1
 %6: detector_Smush0_bigguy40
 %6smush: my_trained_detector_Smush2_40EP_5frame.mat
 %3: WalkStandCrouch_Detector_V2
+
 if (Do6Action)
-    outputFile = fullfile(outputFolderDatabase, "my_trained_detector_Smush2_40EP_5frame.mat");
+    outputFile = fullfile(outputFolderDatabase, "final_detector_Smush2_100EP_5frame.mat");
     doSmush = true;
     preframes = 5;
-    preLoad == true
+    preLoad = true
 
 else
     outputFile = fullfile(outputFolderDatabase, "WalkStandCrouch_Detector_V2.mat");
     doSmush = false;
     preframes = 0;
-    preLoad == false
+    preLoad = false
 
 end
 
@@ -37,54 +40,61 @@ yLim = [-1.15 9.55]
 zLim = [-1 3]
 lidarViewer = pcplayer(xLim,yLim,zLim);
 
+smushArray = cell(1, preframes);
 
+% Populate the array with empty point clouds
 
 while isOpen(lidarViewer)
-    if(lidar.NumPointCloudsAvailable>preframes+1, or preLoad == false)
-        [ptCloud,timestamp] = read(lidar,lidar.NumPointCloudsAvailable);
+    if(lidar.NumPointCloudsAvailable>preframes+1 || ~preLoad)
+        if (preLoad)
 
-        numPoints = size(ptCloud, 1);
+            [ptCloud,timestamp] = read(lidar,lidar.NumPointCloudsAvailable);
 
-        lastPoints = ptCloud(numPoints-preframes:end, :);
+            numPoints = size(ptCloud, 1);
+    
+            lastPoints = ptCloud(numPoints-preframes:end, :);
+            currFrame = lastPoints(6);
+            showFrame = lastPoints(6);
+            for j = 1:preframes
+                smushArray{j} = lastPoints(j);
+                currFrame = pccat([currFrame;lastPoints(j)]);
+            end
+            lastPoint = currFrame
+            view(lidarViewer,showFrame);
+            preLoad = false;
 
-        
-        if (doSmush)
-                currFrame = lastPoints(6);
-                showFrame = lastPoints(6);
-                for j = 1:preframes
-                    backFrame = lastPoints(j);
-                    currFrame = pccat([currFrame;backFrame]);
-                end
-               lastPoint = currFrame
-               view(lidarViewer,showFrame);
         else
+            [ptCloud,timestamp] = read(lidar,lidar.NumPointCloudsAvailable);
+    
+            numPoints = size(ptCloud, 1);
+    
             lastPoint = ptCloud(numPoints:end, :);
-            view(lidarViewer,lastPoint);
+            if (doSmush)
+                currFrame = lastPoint;
+                backframes = [];
+                for j = 1:preframes
+                    if j > 1
+                        backFrames(j-1) = smushArray(j)
+                    end
+                    
+                    currFrame = pccat([currFrame;smushArray{j}]);
+                end
+                smushArray = backFrames
+                smushArray{5} = lastPoint
+                lastPoint = currFrame
+                view(lidarViewer,lastPoint);
+            else
+                lastPoint = ptCloud(numPoints:end, :);
+                view(lidarViewer,lastPoint);
+            end
         end
 
-        % if (doSmushV2)
-        %     lastPoint = ptCloud(numPoints:end, :);
-        %     updateArray = []
-        %     for j = 1:preframes
-        % 
-        %         backFrame = lastPoints(j);
-        %         currFrame = pccat([currFrame;backFrame]);
-        %     end
-        %    lastPoint = currFrame
-        %    view(lidarViewer,showFrame);
-        % else
-        %     lastPoint = ptCloud(numPoints:end, :);
-        %     view(lidarViewer,lastPoint);
-        % end
 
-        %walk stand squat thresh: 0.3
-        %6thresh: 0.1
-        confidenceThreshold = 0.5;
+        %Do the detection
         [box,score,labels] = detect(detector,lastPoint,'Threshold',confidenceThreshold);
         disp(score)
     
-        % Display the predictions on the point cloud.
-    
+        % Display the predictions on the point cloud
         if(bestBoxesOnly)
             [M,bestIndex] = max(score);
             if(~isempty(bestIndex))
@@ -142,7 +152,8 @@ while isOpen(lidarViewer)
             disp(score)
         end
     end
-end 
+end
+
 
 
 stop(lidar)
