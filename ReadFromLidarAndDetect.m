@@ -3,7 +3,7 @@ lidar = velodynelidar('VLP16');
 outputFolderDatabase = "C:\Users\mzinc\OneDrive\Documents\GitHub\Lidar_HAR_Capstone\Database\Trained Detectors\"
 
 
-Do6Action = true;
+Do6Action = false;
 bestBoxesOnly = false;
 confidenceThreshold = 0.5;
 
@@ -74,14 +74,14 @@ while isOpen(lidarViewer)
                 backframes = [];
                 for j = 1:preframes
                     if j > 1
-                        backFrames(j-1) = smushArray(j)
+                        backFrames(j-1) = smushArray(j);
                     end
                     
                     currFrame = pccat([currFrame;smushArray{j}]);
                 end
-                smushArray = backFrames
-                smushArray{5} = lastPoint
-                lastPoint = currFrame
+                smushArray = backFrames;
+                smushArray{5} = lastPoint;
+                lastPoint = currFrame;
                 view(lidarViewer,lastPoint);
             else
                 lastPoint = ptCloud(numPoints:end, :);
