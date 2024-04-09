@@ -1,6 +1,10 @@
 
 # Exercise Pose Detection with LiDAR: Mapping Human Movement
 
+Database: https://curesearch.sharefile.com/home/shared/fo9d5d0c-7e98-41e3-8691-f7001f125458
+Website: https://sites.google.com/view/lidar-h-a-r/home
+
+##Abstract
 
 This research presents a comprehensive approach to detecting and classifying human exercise poses using 3D LIDAR technology coupled with deep learning methodologies. Our study builds upon the foundational work of point cloud processing, introducing a series of deep learning models to recognize and classify human exercises accurately. 
 
